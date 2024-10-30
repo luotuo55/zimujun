@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>语音识别系统</title>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .upload-form {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            background-color: #f9f9f9;
+        }
+        .results {
+            margin-top: 20px;
+        }
+        .result-item {
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            margin-bottom: 10px;
+            background-color: white;
+            border-radius: 5px;
+        }
+        .loading {
+            display: none;
+            color: #666;
+            margin: 10px 0;
+        }
+        button {
+            background-color: #4CAF50;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        input[type="file"] {
+            margin: 10px 0;
+        }
+        .error {
+            color: #f44336;
+            margin: 10px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>语音识别系统</h1>
+        
+        <div class="upload-form">
+            <h2>上传音频文件</h2>
+            <form id="uploadForm">
+                <input type="file" id="audioFile" accept="audio/*" required>
+                <button type="submit">开始识别</button>
+            </form>
+            <div id="loading" class="loading">
+                <p>正在处理中，请稍候...</p>
+                <progress></progress>
+            </div>
+        </div>
+
+        <div class="results">
+            <h2>识别结果</h2>
+            <div id="resultsList">
+                {% for result in results %}
+                <div class="result-item">
+                    <p><strong>文件名：</strong>{{ result.filename }}</p>
+                    <p><strong>识别结果：</strong>{{ result.text }}</p>
+                    <p><strong>识别时间：</strong>{{ result.time }}</p>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('uploadForm').onsubmit = async function(e) {
+            e.preventDefault();
+            
+            const loading = document.getElementById('loading');
+            const fileInput = document.getElementById('audioFile');
+            const resultsList = document.getElementById('resultsList');
+            
+            if (!fileInput.files[0]) {
+                alert('请选择文件');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('audio', fileInput.files[0]);
+
+            loading.style.display = 'block';
+
+            try {
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                const data = await response.json();
+                console.log('服务器返回数据:', data);
+                
+                if (response.ok && data.success) {
+                    const resultDiv = document.createElement('div');
+                    resultDiv.className = 'result-item';
+                    resultDiv.innerHTML = `
+                        <p><strong>文件名：</strong>${data.filename}</p>
+                        <p><strong>识别结果：</strong>${data.result}</p>
+                        <p><strong>识别时间：</strong>${new Date().toLocaleString()}</p>
+                    `;
+                    resultsList.insertBefore(resultDiv, resultsList.firstChild);
+                } else {
+                    let errorMessage = data.error || '识别失败';
+                    if (data.details) {
+                        errorMessage += '\n详细信息: ' + JSON.stringify(data.details);
+                    }
+                    alert(errorMessage);
+                }
+            } catch (error) {
+                console.error('错误:', error);
+                alert('上传失败：' + error.message);
+            } finally {
+                loading.style.display = 'none';
+                fileInput.value = '';
+            }
+        };
+    </script>
+</body>
+</html> 

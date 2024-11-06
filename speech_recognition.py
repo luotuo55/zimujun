@@ -4,6 +4,8 @@ import json
 import time
 import os
 import uuid
+import logging
+from config import Config
 
 s = requests
 
@@ -54,48 +56,59 @@ def query_task(task_id):
     return resp_dic
 
 
-def upload_audio(file_path, server_url, api_key):
-    if not os.path.exists(file_path):
-        print(f"错误：文件 {file_path} 不存在")
-        return None
-
+def upload_audio(file_path):
+    """上传音频文件到服务器"""
     try:
         with open(file_path, 'rb') as audio_file:
-            file_extension = os.path.splitext(file_path)[1].lower()
-            content_type = 'audio/wav' if file_extension == '.wav' else 'audio/mpeg'
-            
+            # 设置请求头
             headers = {
-                'Content-Type': content_type,
-                'X-API-Key': api_key
+                'X-Admin-Key': Config.SERVER['admin_key'],
+                'Origin': Config.SERVER['url'],
+                'Referer': Config.SERVER['url'],
+                'Host': Config.SERVER['url'].replace('http://', '').replace('https://', ''),
+                'Accept': '*/*'
             }
             
-            # 打印请求信息
-            print("\n=== 请求信息 ===")
-            print(f"上传地址: {server_url}/api/upload")
-            print(f"请求头: {headers}")
-            print(f"文件路径: {file_path}")
-            print(f"文件类型: {content_type}")
+            # 准备文件数据
+            files = {
+                'file': (
+                    os.path.basename(file_path),
+                    audio_file,
+                    'audio/mpeg'
+                )
+            }
             
-            response = requests.post(f"{server_url}/api/upload", data=audio_file, headers=headers)
-        
-            # 打印响应信息
-            print("\n=== 响应信息 ===")
-            print(f"状态码: {response.status_code}")
-            print(f"响应头: {dict(response.headers)}")
-            print(f"响应内容: {response.text}")
-        
-        if response.status_code == 200:
-            print("\n文件上传成功")
-            response_json = response.json()
-            return response_json.get('file_url')
-        else:
-            print(f"\n上传失败，状态码: {response.status_code}")
-            return None
-    except requests.RequestException as e:
-        print(f"\n上传过程中发生错误: {e}")
-        return None
+            logging.info(f"正在上传音频文件: {file_path}")
+            logging.info(f"请求头: {headers}")
+            
+            response = requests.post(
+                f"{Config.SERVER['url']}{Config.SERVER['upload_path']}", 
+                headers=headers,
+                files=files,
+                timeout=30
+            )
+            
+            logging.info(f"上传响应状态码: {response.status_code}")
+            logging.info(f"响应头: {dict(response.headers)}")
+            logging.info(f"响应内容: {response.text}")
+            
+            if response.status_code == 200:
+                result = response.json()
+                # 从 data 字段中获取文件 URL
+                if 'data' in result and 'file_url' in result['data']:
+                    # 拼接完整的URL
+                    file_url = f"{Config.SERVER['url']}{result['data']['file_url']}"
+                    logging.info(f"文件上传成功，URL: {file_url}")
+                    return file_url
+                else:
+                    logging.error(f"响应格式不正确: {result}")
+                    return None
+            else:
+                logging.error(f"上传失败: {response.status_code} - {response.text}")
+                return None
+                
     except Exception as e:
-        print(f"\n发生未知错误: {e}")
+        logging.error(f"上传过程中发生错误: {str(e)}")
         return None
 
 
@@ -103,23 +116,23 @@ def file_recognize(local_audio_path=None):
     global audio_url
     
     if local_audio_path:
-        server_url = "http://www.52ai.fun"
-        api_key = "1F1vmARoSjXRTDvywh9XtbnR8vd74AfffF0t0jn3qhM"
-        uploaded_url = upload_audio(local_audio_path, server_url, api_key)
+        logging.info(f"开始处理音频文件: {local_audio_path}")
+        uploaded_url = upload_audio(local_audio_path)
         if uploaded_url:
             audio_url = uploaded_url
-            print(f"获取到的音频URL: {audio_url}")
+            logging.info(f"获取到的音频URL: {audio_url}")
         else:
             return {"error": "音频文件上传失败"}
 
     try:
         task_id = submit_task()
+        logging.info(f"提交任务成功，任务ID: {task_id}")
         start_time = time.time()
         
         while True:
             time.sleep(2)
             resp_dic = query_task(task_id)
-            print("查询结果:", resp_dic)
+            logging.info(f"查询结果: {resp_dic}")
             
             if 'resp' in resp_dic:
                 resp = resp_dic['resp']
@@ -136,16 +149,30 @@ def file_recognize(local_audio_path=None):
                         "details": resp
                     }
             
-            if time.time() - start_time > 300:
+            if time.time() - start_time > 300:  # 5分钟超时
                 return {"error": "识别超时"}
                 
     except Exception as e:
-        print(f"识别过程发生错误: {e}")
+        logging.error(f"识别过程发生错误: {e}")
         return {"error": f"识别错误: {str(e)}"}
 
 
 if __name__ == '__main__':
+    # 设置日志级别
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(levelname)s - %(message)s'
+    )
+    
+    # 获取当前目录
     current_dir = os.getcwd()
     audio_file_path = os.path.join(current_dir, "2.mp3")
+    
+    # 检查文件是否存在
+    if not os.path.exists(audio_file_path):
+        logging.error(f"文件不存在: {audio_file_path}")
+        exit(1)
+        
+    # 执行识别
     result = file_recognize(audio_file_path)
-    print("识别结果:", result)
+    logging.info(f"识别结果: {result}")

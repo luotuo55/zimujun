@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>语音识别系统</title>
+    <title>语音识别与文本校准系统</title>
     <meta charset="UTF-8">
     <style>
         body {
@@ -29,10 +29,10 @@
         }
         .result-item {
             padding: 15px;
-            border-bottom: 1px solid #eee;
-            margin-bottom: 10px;
-            background-color: white;
+            margin-bottom: 15px;
+            border: 1px solid #ddd;
             border-radius: 5px;
+            background-color: white;
         }
         .loading {
             display: none;
@@ -50,24 +50,33 @@
         button:hover {
             background-color: #45a049;
         }
-        input[type="file"] {
-            margin: 10px 0;
+        .text-comparison {
+            display: flex;
+            gap: 20px;
+            margin-top: 10px;
         }
-        .error {
-            color: #f44336;
-            margin: 10px 0;
+        .text-block {
+            flex: 1;
+            padding: 10px;
+            background-color: #f9f9f9;
+            border-radius: 4px;
+        }
+        .timestamp {
+            color: #666;
+            font-size: 0.9em;
+            margin-top: 5px;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>语音识别系统</h1>
+        <h1>语音识别与文本校准系统</h1>
         
         <div class="upload-form">
             <h2>上传音频文件</h2>
             <form id="uploadForm">
                 <input type="file" id="audioFile" accept="audio/*" required>
-                <button type="submit">开始识别</button>
+                <button type="submit">开始处理</button>
             </form>
             <div id="loading" class="loading">
                 <p>正在处理中，请稍候...</p>
@@ -76,13 +85,22 @@
         </div>
 
         <div class="results">
-            <h2>识别结果</h2>
+            <h2>处理结果</h2>
             <div id="resultsList">
                 {% for result in results %}
                 <div class="result-item">
-                    <p><strong>文件名：</strong>{{ result.filename }}</p>
-                    <p><strong>识别结果：</strong>{{ result.text }}</p>
-                    <p><strong>识别时间：</strong>{{ result.time }}</p>
+                    <h3>文件名：{{ result.filename }}</h3>
+                    <div class="text-comparison">
+                        <div class="text-block">
+                            <h4>原始识别文本：</h4>
+                            <p>{{ result.original_text }}</p>
+                        </div>
+                        <div class="text-block">
+                            <h4>校准后文本：</h4>
+                            <p>{{ result.corrected_text }}</p>
+                        </div>
+                    </div>
+                    <div class="timestamp">处理时间：{{ result.time }}</div>
                 </div>
                 {% endfor %}
             </div>
@@ -114,27 +132,32 @@
                 });
 
                 const data = await response.json();
-                console.log('服务器返回数据:', data);
                 
                 if (response.ok && data.success) {
+                    const result = data.result;
                     const resultDiv = document.createElement('div');
                     resultDiv.className = 'result-item';
                     resultDiv.innerHTML = `
-                        <p><strong>文件名：</strong>${data.filename}</p>
-                        <p><strong>识别结果：</strong>${data.result}</p>
-                        <p><strong>识别时间：</strong>${new Date().toLocaleString()}</p>
+                        <h3>文件名：${result.filename}</h3>
+                        <div class="text-comparison">
+                            <div class="text-block">
+                                <h4>原始识别文本：</h4>
+                                <p>${result.original_text}</p>
+                            </div>
+                            <div class="text-block">
+                                <h4>校准后文本：</h4>
+                                <p>${result.corrected_text}</p>
+                            </div>
+                        </div>
+                        <div class="timestamp">处理时间：${result.time}</div>
                     `;
                     resultsList.insertBefore(resultDiv, resultsList.firstChild);
                 } else {
-                    let errorMessage = data.error || '识别失败';
-                    if (data.details) {
-                        errorMessage += '\n详细信息: ' + JSON.stringify(data.details);
-                    }
-                    alert(errorMessage);
+                    alert(data.error || '处理失败');
                 }
             } catch (error) {
                 console.error('错误:', error);
-                alert('上传失败：' + error.message);
+                alert('处理失败：' + error.message);
             } finally {
                 loading.style.display = 'none';
                 fileInput.value = '';
